@@ -1,0 +1,65 @@
+name: Namoz vaqtlari
+
+# Vaqtlar UTC da (Toshkent = UTC+5). Har bir ish namozdan ancha oldin boshlanadi,
+# keyin skript aniq "namozdan 3 daqiqa oldin" gacha kutib, xabar yuboradi.
+on:
+  schedule:
+    - cron: '13 20 * * *'   # 01:13 Toshkent -> Bomdod
+    - cron: '47 5 * * *'    # 10:47 Toshkent -> Peshin
+    - cron: '17 8 * * *'    # 13:17 Toshkent -> Asr
+    - cron: '43 9 * * *'    # 14:43 Toshkent -> Shom
+    - cron: '13 11 * * *'   # 16:13 Toshkent -> Xufton
+    - cron: '0 3 1 * *'     # har oy: repozitoriyni faol saqlash
+  workflow_dispatch:
+    inputs:
+      namoz:
+        description: 'bomdod | peshin | asr | shom | xufton | jadval'
+        default: 'jadval'
+      darhol:
+        description: 'Kutmasdan darhol yuborish (sinov)'
+        type: boolean
+        default: true
+
+permissions:
+  contents: write
+
+jobs:
+  yubor:
+    if: github.event.schedule != '0 3 1 * *'
+    runs-on: ubuntu-latest
+    timeout-minutes: 355
+    env:
+      TZ: Asia/Tashkent
+      BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
+      CHAT_ID: ${{ secrets.CHAT_ID }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: npm install --no-audit --no-fund
+      - name: Namozni aniqlash
+        id: n
+        run: |
+          case "${{ github.event.schedule }}" in
+            '13 20 * * *') echo "namoz=bomdod" >> "$GITHUB_OUTPUT" ;;
+            '47 5 * * *')  echo "namoz=peshin" >> "$GITHUB_OUTPUT" ;;
+            '17 8 * * *')  echo "namoz=asr"    >> "$GITHUB_OUTPUT" ;;
+            '43 9 * * *')  echo "namoz=shom"   >> "$GITHUB_OUTPUT" ;;
+            '13 11 * * *') echo "namoz=xufton" >> "$GITHUB_OUTPUT" ;;
+            *) echo "namoz=${{ inputs.namoz }}" >> "$GITHUB_OUTPUT"
+               if [ "${{ inputs.darhol }}" = "true" ]; then echo "NOW=1" >> "$GITHUB_ENV"; fi ;;
+          esac
+      - run: node namoz.mjs "${{ steps.n.outputs.namoz }}"
+
+  faol-saqlash:
+    if: github.event.schedule == '0 3 1 * *'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: |
+          date -u > .keepalive
+          git config user.name "github-actions"
+          git config user.email "github-actions@users.noreply.github.com"
+          git add .keepalive
+          git commit -m "keepalive" && git push
